@@ -1,49 +1,49 @@
 import { Component } from "react";
+import PokemonErrorView from "./PokemonErrorView";
+import PokemonDataView from "./PokemonDataView";
+import PokemonPendingView from "./PokemonPendingView";
+import pokemonAPI from "../services/pokemon-fetch-api";
 
 export default class PokemonInfo extends Component {
     state = {
         pokemon: null,
-        loading: false,
         error: null,
+        status: "idle",
     };
 
     componentDidUpdate(prevProps, prevState) {
-        if (prevProps.pokemonName !== this.props.pokemonName) {
-            this.loadingControl(false);
-            fetch(`https://pokeapi.co/api/v2/pokemon/${this.props.pokemonName}`)
-                .then(response => response.json())
-                .then(pokemon => this.setState({ pokemon }))
-                .catch(error => this.setState({ error }))
-                .finally(this.loadingControl(false));
+        const prevName = prevProps.pokemonName;
+        const nextName = this.props.pokemonName;
+
+        if (prevName !== nextName) {
+            this.setState({ status: "pending" });
+            // fetch ловить 404 помилки які дає бекенд
+            pokemonAPI
+                .fetchPokemon(nextName)
+                .then(pokemon => this.setState({ pokemon, status: "resolved" }))
+                .catch(error => this.setState({ error, status: "rejected" }));
         }
     }
 
-    loadingControl(value) {
-        this.setState({ loading: value });
-    }
-
     render() {
-        const { pokemon, loading, error } = this.state;
+        const { pokemon, error, status } = this.state;
         const { pokemonName } = this.props;
-        return (
-            <div>
-                {error && <h1>Crash...</h1> }
-                {loading && <div>Loading.....</div>}
-                {!pokemonName && <div>Enter pokemon name.</div>}
-                {pokemon && (
-                    <div>
-                        <p>{pokemon.name}</p>
-                        <img
-                            src={
-                                pokemon.sprites.other["official-artwork"]
-                                    .front_default
-                            }
-                            width="240"
-                            alt={pokemon.name}
-                        />
-                    </div>
-                )}
-            </div>
-        );
+
+        // патерн машина станів воно називається (state machine)
+        if (status === "idle") {
+            return <div>Enter pokemon name.</div>;
+        }
+
+        if (status === "pending") {
+            return <PokemonPendingView pokemonName={pokemonName} />;
+        }
+
+        if (status === "rejected") {
+            return <PokemonErrorView message={error.message} />;
+        }
+
+        if (status === "resolved") {
+            return <PokemonDataView pokemon={pokemon} />;
+        }
     }
 }
